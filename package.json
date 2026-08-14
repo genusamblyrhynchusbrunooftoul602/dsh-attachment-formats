@@ -1,0 +1,67 @@
+{
+  "name": "dsh-attachment-formats",
+  "version": "0.5.0",
+  "description": "DeepSeek Harness 附件格式扩展（Codex 风格）：PDF 文字层提取（pymupdf4llm/pdfjs 双引擎）、Office 文本提取、长文本转存+索引卡、扫描件 OCR（tesseract.js）、浏览器可解码图片转 PNG。",
+  "type": "module",
+  "main": "lib/index.js",
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "slots",
+        "sessions"
+      ]
+    }
+  },
+  "scripts": {
+    "smoke": "node scripts/smoke-host.mjs",
+    "smoke:route": "node scripts/smoke-route.mjs",
+    "smoke:client": "node scripts/smoke-client.mjs",
+    "smoke:ocr": "node scripts/smoke-ocr.mjs"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.80",
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.9.0",
+    "pdfjs-dist": "^4.10.38",
+    "tesseract.js": "^5.1.1"
+  },
+  "devDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/linkingoscar/dsh-attachment-formats.git"
+  },
+  "bugs": {
+    "url": "https://github.com/linkingoscar/dsh-attachment-formats/issues"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "attachment",
+    "pdf",
+    "docx",
+    "xlsx",
+    "pptx",
+    "ocr",
+    "web"
+  ],
+  "license": "Apache-2.0"
+}

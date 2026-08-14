@@ -1,0 +1,9 @@
+# dsh-attachment-formats — 附件格式扩展（Codex 风格兼容）。
+# Host half registers POST /api/attach-formats/convert (PDF→PNG 页、
+# docx/xlsx/pptx→文本); the package also declares a dsh.client web bundle
+# that adds an attach button (conversation.input.left) plus document-level
+# drop/paste interception feeding converted files back into the native
+# composer pipeline.
+- insert:
+    - id: attachment-formats
+      name: dsh-attachment-formats

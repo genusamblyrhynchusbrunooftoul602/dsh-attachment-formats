@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Python venv（pymupdf4llm 高保真引擎，setup 时生成）
+.venv/
+
+# OCR traineddata 缓存（首次识别扫描件时自动下载 ~24MB）
+vendor/tessdata/
+
+# Build outputs / temporary
+dist/
+build/
+temp/
+
+# Logs
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
