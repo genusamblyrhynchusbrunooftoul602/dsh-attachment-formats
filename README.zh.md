@@ -1,7 +1,7 @@
 # dsh-attachment-formats — 附件格式扩展（Codex 风格兼容）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.6.0-informational)](#)
+[![version](https://img.shields.io/badge/version-0.6.1-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
 
@@ -224,8 +224,14 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 
 ## 发布版本
 
+- **[v0.6.1](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.1)**
+  （最新）—— 正确性与工程化修复：附件条崩溃修复（`useCallback` 引用缺失）、
+  转换器不再预截断（端到端恢复「永不静默截断」）、路由统一以会话派生的
+  工作区为准、XLSX 空列坐标修复、按源文件哈希命中的真转换缓存、TTL 以最后
+  访问时间为准、合并进草稿时回读校验；新增 ESLint、CI（Node 20/22）与
+  组件级冒烟测试。
 - **[v0.6.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.0)**
-  （最新）—— 保真度与格式覆盖（DOCX 表格、TIFF、epub/odt/rtf、旧版 Office、
+  —— 保真度与格式覆盖（DOCX 表格、TIFF、epub/odt/rtf、旧版 Office、
   PDF 书签大纲）、百度 OCR + 远程 VLM OCR + 外部文档解析服务、内容自适应引擎、
   附件缓存设置页、工作区零拷贝引用。
 - **[v0.5.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.5.0)**
