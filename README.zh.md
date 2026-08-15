@@ -1,7 +1,7 @@
 # dsh-attachment-formats — 附件格式扩展（Codex 风格兼容）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.6.2-informational)](#)
+[![version](https://img.shields.io/badge/version-0.6.3-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
 
@@ -225,8 +225,14 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 
 ## 发布版本
 
+- **[v0.6.3](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.3)**
+  （最新）—— 缓存生命周期加固：v0.6.1 的 8-hex 遗留缓存目录在清理/清空时
+  一并扫除（不再有不可见孤儿）；JSON 转存区分源文本与落盘产物尺寸（分流
+  按产物口径）；缓存命中降级为索引卡时惰性补齐页面图；INDEX.md 改由合法
+  manifest 全量重建（无 ghost 行、转存时间列修复）；旧版 .doc/.xls/.ppt
+  缓存键改用原始 OLE 字节，命中直接跳过 LibreOffice；manifest/INDEX 原子写。
 - **[v0.6.2](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.2)**
-  （最新）—— 缓存正确性与快路径：缓存目录 16 hex + manifest 存完整
+  —— 缓存正确性与快路径：缓存目录 16 hex + manifest 存完整
   SHA-256；转换策略指纹（换引擎/OCR/doc-server 自动让旧缓存失效）；索引卡
   命中时按结构化 metadata 用当前文件名重建（不再串名）；TTL 纳入模型直接
   read 的文件访问时间；页面图惰性生成（干净小 PDF 不再被整本光栅化拖慢）；
