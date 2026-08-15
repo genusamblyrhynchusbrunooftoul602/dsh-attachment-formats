@@ -310,6 +310,24 @@ console.log("\n== 修复验证：TTL 纳入主文档 atime（模型直接 read �
   check("模型直接 read 过的文档不被误删", existsSync(join(cacheTemp, id, "doc.md")));
 }
 
+console.log("\n== 修复验证：v0.6.1 sha-8 遗留目录被清理（不再成为不可见孤儿）==");
+{
+  const { cleanupCache, clearCache } = await import("../lib/cache.js");
+  const { mkdirSync, writeFileSync: wf2 } = await import("node:fs");
+  // cleanupCache 直接收缓存根目录
+  const legacyRoot = join(temp, "legacy-cache");
+  mkdirSync(join(legacyRoot, "a1b2c3d4"), { recursive: true });
+  wf2(join(legacyRoot, "a1b2c3d4", "doc.md"), "legacy");
+  await cleanupCache(legacyRoot);
+  check("cleanup 删除 sha-8 遗留目录", !existsSync(join(legacyRoot, "a1b2c3d4")));
+  // clearCache 收的是工作区 cwd（内部解析 .dsh-attachments）
+  const legacyWorkspace = join(temp, "legacy-workspace");
+  mkdirSync(join(legacyWorkspace, ".dsh-attachments", "deadbeef"), { recursive: true });
+  wf2(join(legacyWorkspace, ".dsh-attachments", "deadbeef", "doc.md"), "legacy");
+  const clearedLegacy = await clearCache(legacyWorkspace);
+  check("clear 删除 sha-8 遗留目录", clearedLegacy >= 1 && !existsSync(join(legacyWorkspace, ".dsh-attachments", "deadbeef")), `cleared=${clearedLegacy}`);
+}
+
 console.log(`\n${failures === 0 ? "全部通过 ✅" : `${failures} 项失败 ❌`}`);
 console.log(`产物目录: ${temp}`);
 if (failures > 0) process.exitCode = 1;

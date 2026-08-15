@@ -54,6 +54,31 @@ function buildBlankPdf() {
 }
 const fixtureBlankPdf = buildBlankPdf();
 
+/** 多行文本 PDF（Helvetica 文字层）——惰性页面图/低预算分流夹具。 */
+function buildTextPdf(lines) {
+  const ops = ["BT /F1 12 Tf 72 740 Td"]
+    .concat(lines.map((line) => `(${line}) Tj 0 -14 Td`))
+    .join("\n") + "\nET";
+  const objs = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${ops.length} >>\nstream\n${ops}\nendstream`
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [];
+  for (let i = 0; i < objs.length; i += 1) {
+    offsets.push(Buffer.byteLength(pdf, "binary"));
+    pdf += `${i + 1} 0 obj\n${objs[i]}\nendobj\n`;
+  }
+  const xrefStart = Buffer.byteLength(pdf, "binary");
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  return Buffer.from(pdf, "binary");
+}
+
 /** 长 Markdown（>60k 字符，带两级标题）。 */
 function buildLongMd() {
   const heading = (level, text) => `${"#".repeat(level)} ${text}\n`;
@@ -284,6 +309,33 @@ console.log("\n== 长 JSON（text-cache → index 卡 + 键树 + 格式化落盘
   check("JSON 已格式化", formatted.includes('\n  "meta"'));
 }
 
+console.log("\n== 修复验证：JSON 源文本/落盘产物尺寸分离（tier 用产物口径）==");
+{
+  // 单行压缩 JSON：源文本 ≤8 万，pretty 落盘 >8 万——旧逻辑会按源尺寸
+  // 把超限产物误判为可直插。
+  const rows = [];
+  for (let i = 0; i < 600; i += 1) rows.push(`{"id":${i},"name":"用户${i}","note":"${"x".repeat(80)}"}`);
+  const fixtureTierJson = Buffer.from(`{"rows":[${rows.join(",")}]}`, "utf8");
+  const srcText = fixtureTierJson.toString("utf8");
+  check("源文本 ≤8 万（夹具前提）", srcText.length <= 80_000, `src=${srcText.length}`);
+  const first = await callRoute(
+    [{ name: "清单.json", kind: "text-cache", data: fixtureTierJson.toString("base64") }],
+    { cwd: testCwd }
+  );
+  const result = first.body.results?.[0];
+  const artifact = readFileSync(join(testCwd, String(result?.docPath)), "utf8");
+  check("落盘产物 >8 万（pretty）", artifact.length > 80_000, `artifact=${artifact.length}`);
+  check("result 计数为产物口径", result?.charCount === artifact.length && result?.lineCount === artifact.split("\n").length, `char=${result?.charCount}/${artifact.length}`);
+  check("source 口径单独保留", result?.sourceCharCount === srcText.length && result?.sourceLineCount === 1, `src=${result?.sourceCharCount}/${srcText.length} lines=${result?.sourceLineCount}`);
+  const again = await callRoute(
+    [{ name: "清单.json", kind: "text-cache", data: fixtureTierJson.toString("base64") }],
+    { cwd: testCwd }
+  );
+  const hitResult = again.body.results?.[0];
+  check("缓存命中按产物尺寸分流为 index（不误判直插）", hitResult?.kind === "index", `got ${hitResult?.kind}`);
+  check("命中卡片计数为产物口径", hitResult?.charCount === artifact.length, `char=${hitResult?.charCount}/${artifact.length}`);
+}
+
 console.log("\n== 错误映射 ==");
 {
   const { status, body } = await callRoute([
@@ -292,6 +344,32 @@ console.log("\n== 错误映射 ==");
   check("status 200 (per-file error)", status === 200, `got ${status}`);
   check("kind error", body.results?.[0]?.kind === "error");
   check("unsupported message", /暂不支持/.test(body.results?.[0]?.error?.message ?? ""));
+}
+
+console.log("\n== 修复验证：缓存命中降级为 index 时惰性补页面图 ==");
+{
+  // 50 行 × ~120 字符 ≈ 6000 字符（>4000 预算、<8 万直插），全部落在页框内
+  // （pdfjs 只提取页框内的文字，行数过多会被裁掉导致夹具失效）
+  const lines = Array.from({ length: 50 }, (_, i) => `line ${String(i).padStart(3, "0")} ${"padded content text ".repeat(6)}`);
+  const textPdf = buildTextPdf(lines);
+  const id = shortHashOf(textPdf);
+  const pagesDir = join(testCwd, ".dsh-attachments", id, "pages");
+  const first = await callRoute(
+    [{ name: "文本.pdf", kind: "pdf", data: textPdf.toString("base64") }],
+    { cwd: testCwd }
+  );
+  check("默认预算 → 直插 text", first.body.results?.[0]?.kind === "text", `got ${first.body.results?.[0]?.kind}`);
+  const before = existsSync(pagesDir) ? readdirSync(pagesDir).length : 0;
+  check("直插快路径不渲染页面图", before === 0, `got ${before}`);
+  const second = await callRoute(
+    [{ name: "文本.pdf", kind: "pdf", data: textPdf.toString("base64") }],
+    { cwd: testCwd, directLimitChars: 4000 }
+  );
+  const result = second.body.results?.[0];
+  check("低预算命中 → index", result?.kind === "index", `got ${result?.kind}`);
+  check("card 含页面图指引", String(result?.card).includes("页面图"), String(result?.card).slice(0, 160));
+  const after = existsSync(pagesDir) ? readdirSync(pagesDir).length : 0;
+  check("pages/ 已惰性生成", after > 0, `got ${after}`);
 }
 
 console.log("\n== python 引擎（条件用例，venv 可用时）==");

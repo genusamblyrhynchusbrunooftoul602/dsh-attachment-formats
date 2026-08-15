@@ -427,9 +427,16 @@ console.log("\n== P2：路由级（doc-server / VLM / 缓存管理 / 零拷贝�
     check("cache delete", del.body?.ok === true && del.body.removed.includes(id));
     const afterDelete = await call(`/api/attach-formats/cache?sessionId=cache-session&cwd=${encodeURIComponent(cacheTemp)}`);
     check("cache 删除后为空", afterDelete.body?.docs.length === 0);
+    let indexAfterDel = "";
+    try { indexAfterDel = readFileSync(join(cacheTemp, ".dsh-attachments", "INDEX.md"), "utf8"); } catch { /* ignore */ }
+    check("删除后 INDEX 无 ghost 行", !indexAfterDel.includes("缓存文档.md"), indexAfterDel.slice(0, 200));
     await writeCache({ root, rel: ".dsh-attachments" }, shortHashOf(seeded), "再种一个.md", "text", [
       { name: "doc.md", data: seeded }
     ], { charCount: seeded.length, lineCount: 1, docFile: "doc.md" });
+    let indexAfterSeed = "";
+    try { indexAfterSeed = readFileSync(join(cacheTemp, ".dsh-attachments", "INDEX.md"), "utf8"); } catch { /* ignore */ }
+    check("重建 INDEX 含再种文档", indexAfterSeed.includes("再种一个.md"), indexAfterSeed.slice(0, 200));
+    check("INDEX 含转存时间列", /20\d\d-\d\d-\d\d \d\d:\d\d:\d\d/.test(indexAfterSeed), indexAfterSeed.slice(0, 200));
     const cleared = await call("/api/attach-formats/cache/clear", { method: "POST", body: JSON.stringify({ sessionId: "cache-session", cwd: cacheTemp }) });
     check("cache clear", cleared.body?.ok === true && cleared.body.cleared === 1, JSON.stringify(cleared.body));
   }
