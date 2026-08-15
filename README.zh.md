@@ -1,7 +1,7 @@
 # dsh-attachment-formats — 附件格式扩展（Codex 风格兼容）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.5.0-informational)](#)
+[![version](https://img.shields.io/badge/version-0.6.0-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
 
@@ -18,10 +18,13 @@
 | PNG / JPEG / WebP / GIF | 原生管线，本插件不介入 | 图片草稿栏（原生） |
 | **PDF（有文本层）** | 文字层提取（≤40 页用 pymupdf4llm 高保真引擎，更大/不可用时 pdfjs 兜底） | 全文挂**文档卡片**（发送时并入消息）；超限转存工作区 + 索引卡片 |
 | **PDF（扫描件/无文本层）** | tesseract.js OCR（置信度 ≥45 才采用），失败回退页面图 | OCR 成功走文本通道；失败 → 图片草稿栏（仅视觉模型） |
-| **Word (.docx) / Excel (.xlsx) / PPT (.pptx)** | 提取文本 | 文档卡片（发送时并入）；超限转存 + 索引卡片 |
+| **Word (.docx) / Excel (.xlsx) / PPT (.pptx)** | 提取文本——docx 经 mammoth HTML → turndown，**表格保留为 Markdown 管道表** | 文档卡片（发送时并入）；超限转存 + 索引卡片 |
+| **旧 .doc / .xls / .ppt** | LibreOffice headless → docx/xlsx/pptx → 标准 Office 管线（需 `soffice`，缺失时明确报错） | 文档卡片（发送时并入） |
+| **epub / odt / rtf** | pandoc → Markdown（PATH 探测）；无 pandoc 时 epub/odt 走 jszip+turndown 兜底；rtf 需 pandoc | 文档卡片（发送时并入） |
+| **TIFF (.tiff/.tif)** | sharp（libvips）→ PNG 页（多页支持，≤20 页） | 原生图片草稿栏 |
 | txt / md / json / 代码等 | 浏览器本地读取（UTF-8，回退 GB18030） | 文档卡片（发送时并入）；超限转存 + 索引卡片 |
 | BMP / ICO / AVIF / SVG 等 | 浏览器解码后画布转 PNG | 原生图片草稿栏 |
-| TIFF / 旧 .doc / 音视频等 | —（暂不支持，明确提示并跳过） | — |
+| iWork / 音视频 / 压缩包 | —（暂不支持，明确提示并跳过） | — |
 
 ## 文档卡片（Codex 式挂载，输入框保持干净）
 
@@ -61,10 +64,57 @@
 - **PDF 文本引擎**：auto（默认）→ ≤40 页用 venv 内 pymupdf4llm（表格/标题
   高保真），更大文档或 venv 缺失时 pdfjs（秒级）。env：`DSH_ATTACH_ENGINE=
   auto|python|builtin`。
-- **扫描件 OCR**：python（PyMuPDF，需系统 tesseract）→ tesseract.js（纯 JS，
-  首次使用下载 eng/chi_sim 语言包 ~24MB 缓存到 `vendor/tessdata/`）。
-  置信度 <45 时自动回退页面图并说明原因。env：`DSH_ATTACH_OCR=
-  auto|tesseract-js|off`。
+- **扫描件 OCR**：百度云 API（见下）→ python（PyMuPDF，需系统
+  tesseract）→ tesseract.js（纯 JS，首次使用下载 eng/chi_sim 语言包 ~24MB
+  缓存到 `vendor/tessdata/`）。置信度 <45 时自动回退页面图并说明原因。
+  env：`DSH_ATTACH_OCR=auto|baidu|tesseract-js|off`。
+
+## 保真度与格式覆盖
+
+- **DOCX 表格**：mammoth HTML → turndown + GFM 插件，表格保留为 Markdown
+  管道表（替代旧的逐单元格阅读顺序输出）。
+- **TIFF**：sharp（libvips 预编译）解码为 PNG 页，支持多页（单文件 ≤20 页）。
+- **epub / odt / rtf**：pandoc（PATH 探测）转 Markdown；无 pandoc 时 epub/odt
+  走进程内 jszip + turndown 兜底，rtf 给出明确安装提示。
+- **旧 .doc / .xls / .ppt**：LibreOffice headless（探测 PATH 及 Windows 常见
+  安装路径）先转现代 OOXML，再走标准 Office 管线；每次转换使用独立
+  `UserInstallation` profile 避免锁冲突。
+- **PDF 大纲**：书签目录（`get_toc` / pdfjs `getOutline`）优先作为索引卡大纲，
+  字号启发式仅作回退；无书签的 PDF 行为不变。
+
+## 云端 OCR 与内容自适应引擎（零重量级新依赖）
+
+- **百度 OCR API**（扫描件识别首选，免费额度：通用文字识别标准版/高精度版
+  个人认证 1,000 次/月、企业 2,000 次/月，官方免费额度页数据）：页面以 JPEG
+  经纯 HTTPS 上传——**零新增依赖**。通过环境变量配置：
+  - `BAIDU_OCR_API_KEY` / `BAIDU_OCR_SECRET`（百度智能云控制台 → 文字识别 →
+    创建应用获得）；
+  - `DSH_ATTACH_OCR=auto|baidu|tesseract-js|off`（auto = 有凭据即用百度，
+    否则本地 tesseract.js）；
+  - `DSH_ATTACH_OCR_ACCURATE=1` 使用高精度版（独立免费额度）。
+  配额耗尽/调用失败 → 自动回退本地 tesseract.js 并注明；强制 `baidu` 模式
+  则直接说明原因。
+- **远程 VLM OCR**（可选，按 token 计费）：`DSH_ATTACH_VLM_BASE` /
+  `DSH_ATTACH_VLM_MODEL`（可选 `DSH_ATTACH_VLM_KEY`）指向任意 OpenAI 兼容
+  视觉端点（olmOCR-2、GLM-4V、Qwen-VL…），逐页经 chat/completions 转录。
+  OCR 链路：百度 → VLM → tesseract.js（`DSH_ATTACH_OCR=vlm` 可强制）。
+- **内容自适应 PDF 引擎**：41–160 页的文档由 python 引擎按向量密度（采样
+  `get_drawings`）自行决策——纯文字手册跳过耗时的高保真转换直走 pdfjs 快速
+  引擎；表格/图形密集文档仍走 pymupdf4llm。≤40 页行为不变。
+
+## 外部解析服务、缓存管理页与工作区零拷贝
+
+- **外部文档解析服务**（可选）：`DSH_ATTACH_DOC_SERVER=<base URL>` 指向解析
+  服务（PP-StructureV3 `paddleocr serve`、MinerU 或任意包装网关）。契约：
+  `POST {base}/convert` multipart 字段 `file` → `{ "ok": true, "markdown": "..." }`。
+  配置后 PDF 优先走服务，任何失败自动回落本地引擎链。
+- **附件缓存设置页**：设置 → 附件缓存，列出全部已转存文档（规模/引擎/时间），
+  支持逐条删除与全部清空；数据源 `GET /api/attach-formats/cache`、
+  `POST .../cache/delete`、`POST .../cache/clear`。
+- **工作区零拷贝**：>512KB 的文本文件先按「文件名+字节数」在工作区内解析同源
+  路径（`GET /api/attach-formats/resolve`，~2.5s 限时、跳过依赖目录）。命中则挂
+  📎 引用卡片——不读内容、不上传字节，模型用 `read` 工具直接读该路径；未命中
+  回落常规管线。
 
 ## 上下文自适应与全文命令（v2b）
 
@@ -98,19 +148,22 @@ projects/dsh-attachment-formats/
 │   ├── cache.js          # 工作区 .dsh-attachments 落盘/manifest/INDEX.md/清理
 │   ├── py/pymupdf4llm_convert.py  # venv 高保真引擎（子进程调用）
 │   └── convert/
-│       ├── util.js       # 魔数嗅探、base64、限额回退、文本截断
-│       ├── provider.js   # 引擎探测（venv python/pymupdf4llm）+ 子进程桥
-│       ├── pdftext.js    # pdfjs 文字层提取：行组装/页眉页脚去重/标题粗检
+│       ├── util.js       # 魔数嗅探（pdf/tiff/OLE/rtf/zip）、base64、文本截断
+│       ├── provider.js   # 引擎/二进制探测（venv python、pandoc、LibreOffice）+ 子进程桥
+│       ├── pdftext.js    # pdfjs 文字层提取：行组装/页眉页脚去重/书签目录
 │       ├── outline.js    # md 标题大纲、JSON 第一层键树
 │       ├── ocr.js        # tesseract.js OCR（traineddata 下载缓存/置信度）
 │       ├── pdf.js        # pdfjs-dist + @napi-rs/canvas → PNG/JPEG 页
-│       ├── docx.js       # mammoth → 纯文本
+│       ├── docx.js       # mammoth HTML → turndown+GFM → Markdown（表格保留）
 │       ├── xlsx.js       # exceljs → 制表符文本
-│       └── pptx.js       # jszip + a:t 文本运行 → 每页文本
+│       ├── pptx.js       # jszip + a:t 文本运行 → 每页文本
+│       ├── tiff.js       # sharp（libvips）→ PNG 页
+│       ├── pandoc.js     # pandoc → Markdown + epub/odt zip 兜底
+│       └── libreoffice.js # 旧 .doc/.xls/.ppt → 现代 OOXML
 ├── .venv/                # （可选）pymupdf4llm 高保真引擎（setup 生成，不入库）
 ├── vendor/tessdata/      # OCR 语言包缓存（首次使用下载，不入库）
-├── docs/                 # design-longdoc.md / alternatives.md
-├── scripts/smoke-*.mjs   # 四套离线冒烟（转换器/路由/客户端/OCR）
+├── docs/                 # design-longdoc.md / alternatives.md / upgrade-v6.md
+├── scripts/smoke-*.mjs   # 五套离线冒烟（转换器/路由/客户端/OCR/P0）
 └── cordis.patch.yml
 ```
 
@@ -151,20 +204,33 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 ## 已知限制
 
 - OCR（tesseract.js）对低清扫描件、复杂表格质量有限；置信度不足会自动回退
-  页面图并明确说明，绝不注入乱码文本。高质量 OCR（MinerU/PaddleOCR）可作为
-  后续可插拔后端。
+  页面图并明确说明，绝不注入乱码文本。更高质量 OCR（RapidOCR/MinerU/
+  PaddleOCR）可作为后续可插拔后端（见 `docs/upgrade-v6.md`）。
 - pymupdf4llm 高保真引擎仅处理 ≤40 页 PDF（更大用 pdfjs 快速引擎）；表格/
   公式重建质量好但仍非排版级还原，版式细节可用页面图对照。
 - 无文本层且 OCR 不可用/失败的扫描件只能走页面图（视觉模型可用）。
-- DOCX 表格按阅读顺序输出单元格文本，不保留网格排版；公式、图片不提取。
+- 旧 `.doc/.xls/.ppt` 需要 LibreOffice（`soffice`）；`rtf` 需要 pandoc；
+  `epub/odt` 开箱即用，但装有 pandoc 时保真度更高。缺失的二进制会给出
+  明确可操作的错误——绝不静默丢弃。
+- DOCX 的公式与内嵌图片不提取（表格、标题、正文保留）。
 - XLSX 只输出「显示文本/结果」，图表、批注不提取。
-- 标题粗检/大纲是启发式：无显著字号区分的文档大纲较弱，索引卡仍提供行数/
-  页数与读取指引。
-- TIFF、旧版 .doc、iWork、压缩包等暂不转换。
+- 大纲优先用书签目录；无书签的 PDF 回退字号启发式（对无标题样式的文档较弱），
+  索引卡仍提供行数/页数与读取指引。
+- iWork、压缩包等暂不转换。
 - 文档卡片的"发送时合并"走 DOM 事件桥接到 React 受控输入框，属于对
   Harness 未公开 API 的适配；核心包升级后若失效，症状是「卡片内容没进
   消息」，此时可用卡片条的**发送**按钮兜底（合成 Enter 路径），图片路径
   始终不受影响。
+
+## 发布版本
+
+- **[v0.6.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.0)**
+  （最新）—— 保真度与格式覆盖（DOCX 表格、TIFF、epub/odt/rtf、旧版 Office、
+  PDF 书签大纲）、百度 OCR + 远程 VLM OCR + 外部文档解析服务、内容自适应引擎、
+  附件缓存设置页、工作区零拷贝引用。
+- **[v0.5.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.5.0)**
+  —— 文档卡片、索引卡转存、`/attach list|full`、自适应并入上限、
+  pymupdf4llm/pdfjs 引擎、tesseract.js OCR。
 
 ## License
 

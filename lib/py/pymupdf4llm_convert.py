@@ -32,6 +32,41 @@ def main():
         pages = []
         has_text = False
         ocr = False
+
+        # v0.7 内容自适应：大文档先采样判断向量密度，纯文字文档直接跳过
+        # 高保真转换（由 Node 侧回退 pdfjs 快速引擎，避免无谓的长时间转换）。
+        vector_score = None
+        if page_count > 40:
+            sample = min(6, page_count)
+            drawings = 0
+            chars = 0
+            try:
+                for page in doc[:sample]:
+                    drawings += len(page.get_drawings())
+                    chars += len(page.get_text())
+            except Exception:
+                drawings = 0
+                chars = 0
+            vector_score = round(drawings / max(1, sample), 2)
+            # 采样页平均 <10 个矢量对象（表格线/框图等）→ 纯文字文档
+            if vector_score < 10:
+                result = {
+                    "ok": True,
+                    "engine": "pymupdf4llm",
+                    "pageCount": page_count,
+                    "pages": [],
+                    "hasTextLayer": False,
+                    "ocr": False,
+                    "toc": [],
+                    "skipped": True,
+                    "reason": "low-vector-density",
+                    "vectorScore": vector_score,
+                }
+                doc.close()
+                with open(out_path, "w", encoding="utf-8") as handle:
+                    json.dump(result, handle, ensure_ascii=False)
+                return 0
+
         try:
             chunks = pymupdf4llm.to_markdown(
                 doc, page_chunks=True, write_images=False, show_progress=False
@@ -61,6 +96,15 @@ def main():
             except Exception:
                 ocr = False
 
+        # v0.6 P0：书签目录（get_toc）作为大纲优先来源
+        toc = []
+        try:
+            for entry in doc.get_toc()[:60]:
+                if len(entry) >= 3 and isinstance(entry[1], str):
+                    toc.append([int(entry[0]), entry[1], int(entry[2])])
+        except Exception:
+            toc = []
+
         result = {
             "ok": True,
             "engine": "pymupdf4llm",
@@ -68,6 +112,9 @@ def main():
             "pages": pages,
             "hasTextLayer": has_text,
             "ocr": ocr,
+            "toc": toc,
+            "skipped": False,
+            "vectorScore": vector_score,
         }
         doc.close()
     except Exception as exc:  # noqa: BLE001

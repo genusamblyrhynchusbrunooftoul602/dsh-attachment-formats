@@ -147,8 +147,9 @@ const ctx = {
 
 check("plugin exports name/inject/apply", plugin.name === "dsh-attachment-formats" && Array.isArray(plugin.inject) && typeof plugin.apply === "function");
 plugin.apply(ctx);
-check("route registered", routes.length === 1 && routes[0].path === "/api/attach-formats/convert" && routes[0].kind === "exact");
+check("route registered", routes.some((route) => route.path === "/api/attach-formats/convert" && route.kind === "exact"));
 check("/attach command registered", registeredCommands.length === 1 && registeredCommands[0].name === "attach");
+const convertHandler = routes.find((route) => route.path === "/api/attach-formats/convert").handler;
 
 // 经典用例固定 builtin 引擎 + 关闭 OCR，保证速度与确定性；python/OCR 用例单独跑。
 const previousEngine = process.env.DSH_ATTACH_ENGINE;
@@ -157,7 +158,7 @@ process.env.DSH_ATTACH_ENGINE = "builtin";
 process.env.DSH_ATTACH_OCR = "off";
 
 async function callRoute(files, extra = {}) {
-  const handler = routes[0].handler;
+  const handler = convertHandler;
   const body = JSON.stringify({ files, ...extra });
   const req = new Readable({
     read() {
@@ -316,7 +317,7 @@ console.log("\n== v2b /attach 命令 ==");
 
 console.log("\n== 非 POST ==");
 {
-  const handler = routes[0].handler;
+  const handler = convertHandler;
   const req = new Readable({ read() {} });
   req.method = "GET";
   req.url = "/api/attach-formats/convert";

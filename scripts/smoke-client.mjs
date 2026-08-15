@@ -155,8 +155,10 @@ try {
 
 const left = registered.filter((r) => r.key === "conversation.input.left");
 const dock = registered.filter((r) => r.key === "conversation.input.dock");
+const settings = registered.filter((r) => r.key === "settings.section");
 check("input.left registered", left.length === 1 && left[0].options.id === "attach-formats");
 check("input.dock registered", dock.length === 1 && dock[0].options.id === "attach-formats");
+check("settings.section registered (cache page)", settings.length === 1 && settings[0].options.id === "attach-cache");
 
 const drops = documentListeners.filter((l) => l.type === "drop" && l.capture);
 const pastes = documentListeners.filter((l) => l.type === "paste" && l.capture);

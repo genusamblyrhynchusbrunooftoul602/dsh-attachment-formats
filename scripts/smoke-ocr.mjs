@@ -118,7 +118,7 @@ process.env.DSH_ATTACH_ENGINE = "builtin"; // 固定引擎，避免 python 干�
 process.env.DSH_ATTACH_OCR = "auto";
 
 async function callRoute(files, extra = {}) {
-  const handler = routes[0].handler;
+  const handler = routes.find((route) => route.path === "/api/attach-formats/convert").handler;
   const body = JSON.stringify({ files, cwd: testCwd, ...extra });
   const req = new Readable({
     read() {
