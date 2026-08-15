@@ -20,7 +20,7 @@ import { convertPandocFormat } from "../lib/convert/pandoc.js";
 import { probeLibreOffice, probePandoc, runPythonPdf, VENV_PYTHON } from "../lib/convert/provider.js";
 import { libreOfficeConvert } from "../lib/convert/libreoffice.js";
 import { extractPdfText } from "../lib/convert/pdftext.js";
-import { resolveCacheRoot, writeCache, shortHashOf } from "../lib/cache.js";
+import { resolveCacheRoot, writeCache, shortHashOf, sha256Of } from "../lib/cache.js";
 import { existsSync } from "node:fs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -441,15 +441,25 @@ console.log("\n== P2：路由级（doc-server / VLM / 缓存管理 / 零拷贝�
     check("cache clear", cleared.body?.ok === true && cleared.body.cleared === 1, JSON.stringify(cleared.body));
   }
 
-  // ---- 工作区零拷贝解析 ----------------------------------------------------
+  // ---- 工作区零拷贝解析（名+大小+完整 SHA-256 同源判定）-------------------
   {
     const sub = join(temp, "subdir");
     mkdirSync(sub, { recursive: true });
     const big = "x".repeat(700 * 1024); // 700KB，超过 512KB 阈值
     writeFileSync(join(sub, "大文件.md"), big);
-    const resolve = await call(`/api/attach-formats/resolve?sessionId=test-session&cwd=${encodeURIComponent(temp)}&name=${encodeURIComponent("大文件.md")}&size=${Buffer.byteLength(big)}`);
-    check("resolve 命中同源文件", resolve.body?.ok === true && resolve.body.found === true && resolve.body.rel === "subdir/大文件.md", JSON.stringify(resolve.body));
-    const miss = await call(`/api/attach-formats/resolve?sessionId=test-session&cwd=${encodeURIComponent(temp)}&name=${encodeURIComponent("不存在.md")}&size=1`);
+    const hash = sha256Of(Buffer.from(big));
+    // 同名同大小的不同内容（silent substitution 陷阱）：哈希必须把候选过滤掉
+    const subB = join(temp, "subdir-b");
+    mkdirSync(subB, { recursive: true });
+    writeFileSync(join(subB, "大文件.md"), "y".repeat(700 * 1024));
+    const resolve = await call(`/api/attach-formats/resolve?sessionId=test-session&cwd=${encodeURIComponent(temp)}&name=${encodeURIComponent("大文件.md")}&size=${Buffer.byteLength(big)}&hash=${hash}`);
+    check("resolve 哈希命中同源文件", resolve.body?.ok === true && resolve.body.found === true && resolve.body.rel === "subdir/大文件.md", JSON.stringify(resolve.body));
+    const otherHash = sha256Of(Buffer.from("y".repeat(700 * 1024)));
+    const substitute = await call(`/api/attach-formats/resolve?sessionId=test-session&cwd=${encodeURIComponent(temp)}&name=${encodeURIComponent("大文件.md")}&size=${Buffer.byteLength(big)}&hash=${otherHash}`);
+    check("同源判定区分同名同大小不同内容", substitute.body?.ok === true && substitute.body.found === true && substitute.body.rel === "subdir-b/大文件.md", JSON.stringify(substitute.body));
+    const noHash = await call(`/api/attach-formats/resolve?sessionId=test-session&cwd=${encodeURIComponent(temp)}&name=${encodeURIComponent("大文件.md")}&size=${Buffer.byteLength(big)}`);
+    check("无 hash 不判定同源", noHash.body?.ok === true && noHash.body.found === false, JSON.stringify(noHash.body));
+    const miss = await call(`/api/attach-formats/resolve?sessionId=test-session&cwd=${encodeURIComponent(temp)}&name=${encodeURIComponent("不存在.md")}&size=1&hash=${hash}`);
     check("resolve 未命中", miss.body?.ok === true && miss.body.found === false);
   }
 

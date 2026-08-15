@@ -310,6 +310,24 @@ console.log("\n== 修复验证：TTL 纳入主文档 atime（模型直接 read �
   check("模型直接 read 过的文档不被误删", existsSync(join(cacheTemp, id, "doc.md")));
 }
 
+console.log("\n== 修复验证：INDEX 单元格转义（管道符/换行）==");
+{
+  const { writeCache, shortHashOf, sha256Of } = await import("../lib/cache.js");
+  const idxRoot = join(temp, "index-escape");
+  const seeded = Buffer.from("escape");
+  await writeCache({ root: idxRoot, rel: ".dsh-attachments" }, shortHashOf(seeded), "财务|最终版.md", "text", [
+    { name: "doc.md", data: seeded }
+  ], { sourceHash: sha256Of(seeded), charCount: seeded.length, lineCount: 1, docFile: "doc.md" });
+  const idx = readFileSync(join(idxRoot, "INDEX.md"), "utf8");
+  check("管道符被转义（不炸列）", idx.includes("财务\\|最终版.md") && !idx.includes("财务|最终版.md"), idx.slice(0, 200));
+  const seeded2 = Buffer.from("escape2");
+  await writeCache({ root: idxRoot, rel: ".dsh-attachments" }, shortHashOf(seeded2), "换行\n名.md", "text", [
+    { name: "doc.md", data: seeded2 }
+  ], { sourceHash: sha256Of(seeded2), charCount: seeded2.length, lineCount: 1, docFile: "doc.md" });
+  const idx2 = readFileSync(join(idxRoot, "INDEX.md"), "utf8");
+  check("换行被折叠为空格", idx2.includes("换行 名.md") && !idx2.includes("换行\n名.md"), idx2.slice(0, 260));
+}
+
 console.log("\n== 修复验证：v0.6.1 sha-8 遗留目录被清理（不再成为不可见孤儿）==");
 {
   const { cleanupCache, clearCache } = await import("../lib/cache.js");

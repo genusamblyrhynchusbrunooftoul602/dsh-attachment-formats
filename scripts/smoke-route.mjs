@@ -334,6 +334,7 @@ console.log("\n== 修复验证：JSON 源文本/落盘产物尺寸分离（tier 
   const hitResult = again.body.results?.[0];
   check("缓存命中按产物尺寸分流为 index（不误判直插）", hitResult?.kind === "index", `got ${hitResult?.kind}`);
   check("命中卡片计数为产物口径", hitResult?.charCount === artifact.length, `char=${hitResult?.charCount}/${artifact.length}`);
+  check("缓存命中保留 source 口径（cache-transparent shape）", hitResult?.sourceCharCount === srcText.length && hitResult?.sourceLineCount === 1, `src=${hitResult?.sourceCharCount}/${srcText.length} lines=${hitResult?.sourceLineCount}`);
 }
 
 console.log("\n== 错误映射 ==");
