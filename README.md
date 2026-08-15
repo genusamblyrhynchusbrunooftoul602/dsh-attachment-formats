@@ -127,11 +127,14 @@ and v0.6 roadmap): `docs/upgrade-v6.md`.
 - **Attachment cache settings page**: Settings → 附件缓存 lists every spilled
   document (size/engine/time) with per-item delete and clear-all, backed by
   `GET /api/attach-formats/cache` + `POST .../cache/delete` + `POST .../cache/clear`.
-- **Workspace zero-copy**: text files >512KB are first resolved against the
-  session workspace by name+size (`GET /api/attach-formats/resolve`, bounded
-  ~2.5s walk skipping dependency dirs). A hit mounts a 📎 reference card —
-  no bytes are read or uploaded; the model reads the path with its `read` tool.
-  A miss falls back to the normal pipeline.
+- **Workspace zero-copy**: text files between 512KB and 16MB are first resolved
+  against the session workspace: the browser reads the file locally to compute its
+  full SHA-256, then `GET /api/attach-formats/resolve` asks the host to confirm a
+  same-source file by **name + size + full SHA-256** (bounded ~2.5s walk skipping
+  dependency dirs). A hit mounts a 📎 reference card — the **content is not
+  uploaded** (only the name, size and hash are sent); the model reads the path with
+  its `read` tool. A miss falls back to the normal upload pipeline. Files over 16MB
+  are rejected outright (no zero-copy attempt).
 
 ## Context adaptation & full-text command (v2b)
 
