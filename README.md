@@ -1,7 +1,7 @@
 # dsh-attachment-formats — Attachment Format Expansion (Codex-style)
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.6.1-informational)](#)
+[![version](https://img.shields.io/badge/version-0.6.2-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
 
@@ -253,8 +253,16 @@ afterwards).
 
 ## Releases
 
+- **[v0.6.2](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.2)**
+  (latest) — cache correctness & fast path: 16-hex cache ids with full SHA-256 in the
+  manifest, converter-policy fingerprint (engine/OCR/doc-server switches invalidate
+  the cache), index cards rebuilt from structured metadata on every hit (no filename
+  bleed-through), TTL counts model `read` access via file atime, page images rendered
+  lazily (clean small PDFs skip rasterization), 2–16 MB text files reach the host
+  spill instead of being rejected, React key warnings eliminated, Node >=20, CI
+  actions upgraded to v7.
 - **[v0.6.1](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.1)**
-  (latest) — correctness & engineering fixes: attachment-dock crash fix (`useCallback`
+  — correctness & engineering fixes: attachment-dock crash fix (`useCallback`
   reference), converters no longer pre-truncate (never-silent-truncation restored
   end-to-end), session-derived workspace authority for all routes, XLSX empty-column
   coordinate fix, true conversion cache keyed by source hash, cache TTL based on last

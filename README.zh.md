@@ -1,7 +1,7 @@
 # dsh-attachment-formats — 附件格式扩展（Codex 风格兼容）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.6.1-informational)](#)
+[![version](https://img.shields.io/badge/version-0.6.2-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
 
@@ -225,8 +225,15 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 
 ## 发布版本
 
+- **[v0.6.2](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.2)**
+  （最新）—— 缓存正确性与快路径：缓存目录 16 hex + manifest 存完整
+  SHA-256；转换策略指纹（换引擎/OCR/doc-server 自动让旧缓存失效）；索引卡
+  命中时按结构化 metadata 用当前文件名重建（不再串名）；TTL 纳入模型直接
+  read 的文件访问时间；页面图惰性生成（干净小 PDF 不再被整本光栅化拖慢）；
+  2–16MB 文本可走主机转存不再被拒；消除 React key 警告；Node >=20；CI
+  actions 升级 v7。
 - **[v0.6.1](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.1)**
-  （最新）—— 正确性与工程化修复：附件条崩溃修复（`useCallback` 引用缺失）、
+  —— 正确性与工程化修复：附件条崩溃修复（`useCallback` 引用缺失）、
   转换器不再预截断（端到端恢复「永不静默截断」）、路由统一以会话派生的
   工作区为准、XLSX 空列坐标修复、按源文件哈希命中的真转换缓存、TTL 以最后
   访问时间为准、合并进草稿时回读校验；新增 ESLint、CI（Node 20/22）与
