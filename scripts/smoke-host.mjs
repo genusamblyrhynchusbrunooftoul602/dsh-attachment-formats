@@ -262,15 +262,16 @@ console.log("\n== 修复验证：DOCX 转换器不截断 ==");
 
 console.log("\n== 修复验证：缓存 TTL 按 lastAccessedAt 续期 ==");
 {
-  const { cleanupCache, writeCache, shortHashOf } = await import("../lib/cache.js");
+  const { cleanupCache, writeCache, shortHashOf, sha256Of } = await import("../lib/cache.js");
   const seeded = Buffer.from("ttl 测试内容");
   const id = shortHashOf(seeded);
+  check("目录 id 16 hex / 完整哈希 64 hex", /^[a-f0-9]{16}$/.test(id) && /^[a-f0-9]{64}$/.test(sha256Of(seeded)), id);
   const cacheTemp = join(temp, "ttl-cache");
   const { mkdirSync } = await import("node:fs");
   mkdirSync(cacheTemp, { recursive: true });
   await writeCache({ root: cacheTemp, rel: ".dsh-attachments" }, id, "ttl.md", "text", [
     { name: "doc.md", data: seeded }
-  ], { sourceHash: id, charCount: seeded.length, lineCount: 1, docFile: "doc.md" });
+  ], { sourceHash: sha256Of(seeded), charCount: seeded.length, lineCount: 1, docFile: "doc.md" });
   // 把 manifest 的 lastAccessedAt 拨到"刚刚"、目录 mtime 拨到 30 天前（模拟频繁访问的旧目录）
   const { writeFileSync: wfs, utimesSync } = await import("node:fs");
   const manifestPath = join(cacheTemp, id, "manifest.json");
@@ -281,6 +282,32 @@ console.log("\n== 修复验证：缓存 TTL 按 lastAccessedAt 续期 ==");
   utimesSync(join(cacheTemp, id), old, old);
   await cleanupCache(cacheTemp);
   check("频繁访问的旧目录不会被误删", existsSync(join(cacheTemp, id, "doc.md")));
+}
+
+console.log("\n== 修复验证：TTL 纳入主文档 atime（模型直接 read 续期）==");
+{
+  const { cleanupCache, writeCache, shortHashOf, sha256Of } = await import("../lib/cache.js");
+  const seeded = Buffer.from("atime 测试内容");
+  const id = shortHashOf(seeded);
+  const cacheTemp = join(temp, "atime-cache");
+  const { mkdirSync } = await import("node:fs");
+  mkdirSync(cacheTemp, { recursive: true });
+  await writeCache({ root: cacheTemp, rel: ".dsh-attachments" }, id, "atime.md", "text", [
+    { name: "doc.md", data: seeded }
+  ], { sourceHash: sha256Of(seeded), charCount: seeded.length, lineCount: 1, docFile: "doc.md" });
+  // 全部写回 30 天前（manifest 从未被插件 touch），但 doc.md 的 atime 是"刚刚"
+  // ——模拟模型绕过插件直接用 read 工具读 doc.md 的情况。
+  const { writeFileSync: wfs, utimesSync } = await import("node:fs");
+  const old = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  const fresh = new Date();
+  const manifestPath = join(cacheTemp, id, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.lastAccessedAt = old.toISOString();
+  wfs(manifestPath, JSON.stringify(manifest));
+  utimesSync(join(cacheTemp, id), old, old);
+  utimesSync(join(cacheTemp, id, "doc.md"), fresh, old);
+  await cleanupCache(cacheTemp);
+  check("模型直接 read 过的文档不被误删", existsSync(join(cacheTemp, id, "doc.md")));
 }
 
 console.log(`\n${failures === 0 ? "全部通过 ✅" : `${failures} 项失败 ❌`}`);

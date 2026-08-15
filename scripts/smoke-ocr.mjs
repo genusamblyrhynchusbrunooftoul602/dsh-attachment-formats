@@ -171,8 +171,14 @@ if (engReady && chiReady) {
 
 console.log("\n== 聚合索引 INDEX.md（多文档）==");
 {
-  const countCacheDirs = () =>
-    readdirSync(join(testCwd, ".dsh-attachments"), { withFileTypes: true }).filter((e) => e.isDirectory()).length;
+  const countCacheDirs = () => {
+    // 无 traineddata（CI）时 OCR 用例全跳过，.dsh-attachments 可能尚未创建：ENOENT 视为 0
+    try {
+      return readdirSync(join(testCwd, ".dsh-attachments"), { withFileTypes: true }).filter((e) => e.isDirectory()).length;
+    } catch {
+      return 0;
+    }
+  };
   const before = countCacheDirs(); // 前面的 OCR 用例可能已落盘缓存，用增量断言
   const longA = "a".repeat(70_000) + "\n# 甲文档\n";
   const longB = "b".repeat(70_000) + "\n# 乙文档\n";

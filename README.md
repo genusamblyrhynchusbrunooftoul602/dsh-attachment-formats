@@ -46,13 +46,15 @@ always stays on top and no content is lost:
 Text beyond 80k characters and long multi-page PDFs are **not stuffed into the message**.
 Instead:
 
-1. the host spills them into the session workspace `.dsh-attachments/<sha-8>/`
-   (content-addressed, reused on re-drop, auto-cleaned after 7 days):
+1. the host spills them into the session workspace `.dsh-attachments/<sha-16>/`
+   (content-addressed, reused on re-drop, auto-cleaned after ~7 days of no access):
    - `doc.md` — PDF text layer assembled per page (leading `<!-- pN -->` markers),
      Office-extracted text, long text as-is (long JSON is prettified to `doc.json`);
    - `pages/pNN.png` — rendered page images (≤100 pages, for vision models via
-     `read_image`);
-   - `manifest.json` — source, page/line/char counts, engine;
+     `read_image`; rendered lazily, only when the index-card path needs them);
+   - `manifest.json` — source, page/line/char counts, engine, full source SHA-256
+     and the converter-policy fingerprint (engine/OCR/doc-server switches invalidate
+     the cache automatically);
    - `INDEX.md` (cache root) — the aggregated list of every spilled document in this
      workspace.
 2. the message carries only a few-hundred-token **index card**: page/line/char counts,

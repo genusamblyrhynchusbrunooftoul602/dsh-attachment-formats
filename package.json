@@ -37,7 +37,7 @@
     "lint": "eslint ."
   },
   "engines": {
-    "node": ">=18.17"
+    "node": ">=20"
   },
   "dependencies": {
     "@joplin/turndown-plugin-gfm": "^1.0.67",

@@ -383,6 +383,27 @@ console.log("\n== 修复验证：转换缓存（同文件复用，跳过引擎�
   check("第二次命中缓存（engine 标记 (cache)）", typeof b?.engine === "string" && b.engine.includes("(cache)"), `engine=${b?.engine}`);
 }
 
+console.log("\n== 修复验证：转换策略指纹（换引擎不吃旧缓存）==");
+{
+  // fixturePdf 已由 builtin 引擎转换并缓存；切成 python 引擎、相同字节
+  // 必须因 converterFingerprint 变化而重跑当前引擎，而不是吃到旧结果。
+  if (await probePythonEngine()) {
+    process.env.DSH_ATTACH_ENGINE = "python";
+    try {
+      const { body } = await callRoute(
+        [{ name: "报告.pdf", kind: "pdf", data: fixturePdf.toString("base64") }],
+        { cwd: testCwd }
+      );
+      const result = body.results?.[0];
+      check("同字节换引擎 → 不命中旧缓存", result?.kind === "text" && result?.engine === "pymupdf4llm", `engine=${result?.engine}`);
+    } finally {
+      process.env.DSH_ATTACH_ENGINE = "builtin";
+    }
+  } else {
+    console.log("  skip 指纹门控（venv 不可用）");
+  }
+}
+
 console.log("\n== 修复验证：cwd 权威源（会话未驻留拒绝）==");
 {
   const { status, body } = await callRoute(

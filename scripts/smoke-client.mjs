@@ -230,6 +230,12 @@ check("pdf drop intercepted", evPdf.prevented === true && evPdf.stopped === true
   check("__components 导出完整", typeof components === "object" && components !== null
     && ["AttachButton", "AttachDock", "ChipPill", "CacheSettings"].every((name) => typeof components[name] === "function"));
   const mountResults = [];
+  const reactWarnings = [];
+  const realError = console.error;
+  console.error = (...args) => {
+    reactWarnings.push(args.map(String).join(" "));
+    realError(...args);
+  };
   const mount = (name, props) => {
     try {
       const html = renderToString(React.createElement(components[name], props));
@@ -244,7 +250,10 @@ check("pdf drop intercepted", evPdf.prevented === true && evPdf.stopped === true
     && mount("AttachDock", { sessionId: "s1" })
     && mount("ChipPill", { item: { key: "k", name: "测试.md", kind: "text", chars: 10, text: "x" } })
     && mount("CacheSettings", {});
+  console.error = realError;
   check("四个组件均可真实挂载（钩子引用完整，无 ReferenceError）", allMounted, mountResults.join(" | "));
+  const keyWarnings = reactWarnings.filter((line) => line.includes("unique \"key\""));
+  check("挂载无 React key 警告（列表渲染键完整）", keyWarnings.length === 0, keyWarnings.slice(0, 2).join(" | "));
 }
 
 console.log(`\n${failures === 0 ? "客户端冒烟通过 ✅" : `${failures} 项失败 ❌`}`);
