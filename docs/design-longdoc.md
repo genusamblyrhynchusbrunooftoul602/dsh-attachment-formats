@@ -1,15 +1,16 @@
 # 长文档附件方案（v2 设计稿）
 
-> **状态**：v2a + v3 + v2b 已实现（插件 v0.5）——PDF 文字层提取与分级、
+> **状态**：v2a + v3 + v2b 已实现（插件 v0.6）——PDF 文字层提取与分级、
 > 工作区 `.dsh-attachments` 落盘 + manifest + 聚合 INDEX.md、索引卡注入、
 > 长 JSON 键树 / md 大纲、扫描件回退页图；v3：pymupdf4llm 高保真引擎
 > （venv 子进程，≤40 页）、tesseract.js OCR（置信度门控 45）；v2b：
 > `/attach list|full` 全文命令（next-step 收件箱注入）与上下文余量感知的
-> 自适应并入上限（token-meter contextPressure 投影）。v0.5 起文本附件改为
-> **Codex 式文档卡片挂载**（输入框保持干净，发送瞬间合并进消息）。
+> 自适应并入上限（token-meter contextPressure 投影）。v0.6 起文本附件改为
+> **Codex 式文档卡片挂载**（输入框保持干净，发送瞬间合并进消息），并新增
+> 格式覆盖、云 OCR、转换缓存与工作区零拷贝（见 docs/upgrade-v6.md）。
 > 高质量 OCR 后端（MinerU/PaddleOCR）作为可插拔扩展点预留。
-> 测试：`npm run smoke` / `smoke:route` / `smoke:client` / `smoke:ocr`，
-> 并在真实 21 页论文、320 页手册、扫描成绩单上验证。
+> 测试：`npm run smoke:all`（五套冒烟），并在真实 21 页论文、320 页手册、
+> 扫描成绩单上验证。
 >
 > 回应的问题：v1 把 PDF 渲染成图、把长文本直插草稿，面对多页图文论文、
 > 长 md/json 时能不能保证不丢上下文？

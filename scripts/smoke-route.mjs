@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import JSZip from "jszip";
 import * as plugin from "../lib/index.js";
 import { probePythonEngine } from "../lib/convert/provider.js";
-import { shortHashOf, writeCache, resolveCacheRoot } from "../lib/cache.js";
+import { shortHashOf } from "../lib/cache.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixturePdf = readFileSync(join(root, "temp", "fixture.pdf"));
@@ -119,9 +119,47 @@ async function buildLongDocx() {
 }
 const fixtureLongDocx = await buildLongDocx();
 
+/** 超大 DOCX（~36 万字符，验证"转换器不截断、全文落盘"）。 */
+async function buildHugeDocx() {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      "</Types>"
+  );
+  zip.file(
+    "_rels/.rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      "</Relationships>"
+  );
+  const paragraphs = [];
+  for (let i = 0; i < 14000; i += 1) {
+    paragraphs.push(`<w:p><w:r><w:t>段落 ${i}：全文不截断验证内容。abcdefghijklmnopqrstuvwxyz</w:t></w:r></w:p>`);
+  }
+  zip.file(
+    "word/document.xml",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      `<w:body>${paragraphs.join("")}</w:body></w:document>`
+  );
+  return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+}
+const fixtureHugeDocx = await buildHugeDocx();
+
 // ---- 假 cordis 上下文（不注入 attachments → 走回退限额）------------------
 const routes = [];
 const registeredCommands = [];
+const sessionsStub = {
+  get(sessionId) {
+    return sessionId === "test-session" ? { header: { cwd: testCwd } } : undefined;
+  }
+};
 const ctx = {
   effect(callback) {
     callback();
@@ -139,8 +177,8 @@ const ctx = {
       return () => {};
     }
   },
-  get() {
-    return undefined;
+  get(name) {
+    return name === "sessions" ? sessionsStub : undefined;
   },
   logger: console
 };
@@ -159,7 +197,7 @@ process.env.DSH_ATTACH_OCR = "off";
 
 async function callRoute(files, extra = {}) {
   const handler = convertHandler;
-  const body = JSON.stringify({ files, ...extra });
+  const body = JSON.stringify({ files, sessionId: "test-session", ...extra });
   const req = new Readable({
     read() {
       this.push(Buffer.from(body));
@@ -260,8 +298,10 @@ console.log("\n== python 引擎（条件用例，venv 可用时）==");
 if (await probePythonEngine()) {
   process.env.DSH_ATTACH_ENGINE = "python";
   try {
+    // 尾部追加字节改变内容哈希，避免命中前面 builtin 引擎留下的转换缓存
+    const uncachedPdf = Buffer.concat([fixturePdf, Buffer.from("py-engine")]);
     const { body } = await callRoute([
-      { name: "报告.pdf", kind: "pdf", data: fixturePdf.toString("base64") }
+      { name: "报告.pdf", kind: "pdf", data: uncachedPdf.toString("base64") }
     ]);
     const result = body.results?.[0];
     check("python pdf → text", result?.kind === "text", `got ${result?.kind}`);
@@ -313,6 +353,43 @@ console.log("\n== v2b /attach 命令 ==");
   check("/attach full 未命中 → error", missing.kind === "error");
   const badVerb = await plugin.executeAttachCommand(ctx, invocation("explode"));
   check("未知子命令 → error", badVerb.kind === "error");
+}
+
+console.log("\n== 修复验证：转换器不截断（全文落盘）==");
+{
+  const { body } = await callRoute(
+    [{ name: "巨无霸.docx", kind: "docx", data: fixtureHugeDocx.toString("base64") }],
+    { cwd: testCwd }
+  );
+  const result = body.results?.[0];
+  check("36 万字符 docx → index（未被截到 30 万以下）", result?.kind === "index" && result.charCount > 300_000, `kind=${result?.kind} chars=${result?.charCount}`);
+  const docFile = join(testCwd, String(result?.docPath ?? ""));
+  check("落盘 doc.md 为全文", existsSync(docFile) && readFileSync(docFile, "utf8").length > 300_000);
+}
+
+console.log("\n== 修复验证：转换缓存（同文件复用，跳过引擎）==");
+{
+  const first = await callRoute(
+    [{ name: "长文档.md", kind: "text-cache", data: fixtureLongMd.toString("base64") }],
+    { cwd: testCwd }
+  );
+  const second = await callRoute(
+    [{ name: "长文档.md", kind: "text-cache", data: fixtureLongMd.toString("base64") }],
+    { cwd: testCwd }
+  );
+  const a = first.body.results?.[0];
+  const b = second.body.results?.[0];
+  check("两次返回同一 docPath", a?.kind === "index" && b?.docPath === a?.docPath);
+  check("第二次命中缓存（engine 标记 (cache)）", typeof b?.engine === "string" && b.engine.includes("(cache)"), `engine=${b?.engine}`);
+}
+
+console.log("\n== 修复验证：cwd 权威源（会话未驻留拒绝）==");
+{
+  const { status, body } = await callRoute(
+    [{ name: "报告.pdf", kind: "pdf", data: fixturePdf.toString("base64") }],
+    { sessionId: "ghost-session" }
+  );
+  check("未知 sessionId → 400 session-not-resident", status === 400 && body.error?.code === "session-not-resident", `status=${status} code=${body?.error?.code}`);
 }
 
 console.log("\n== 非 POST ==");

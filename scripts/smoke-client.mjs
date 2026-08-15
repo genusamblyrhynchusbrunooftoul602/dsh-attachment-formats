@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
+import { renderToString } from "react-dom/server";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = readFileSync(join(root, "lib", "client.js"), "utf8");
@@ -181,14 +182,12 @@ drops[0].fn(evNative);
 check("native-image drop passes through", evNative.prevented !== true && evNative.stopped !== true);
 
 // ---- 含 PDF 的 drop 必须拦截 ------------------------------------------------
-let pdfIntakeBusy = false;
 const transferPdf = { types: ["Files"], files: [{ name: "报告.pdf", type: "application/pdf" }] };
 const evPdf = {
   dataTransfer: transferPdf,
   preventDefault: () => { evPdf.prevented = true; },
   stopImmediatePropagation: () => { evPdf.stopped = true; }
 };
-pdfIntakeBusy = true;
 drops[0].fn(evPdf);
 check("pdf drop intercepted", evPdf.prevented === true && evPdf.stopped === true);
 
@@ -223,6 +222,29 @@ check("pdf drop intercepted", evPdf.prevented === true && evPdf.stopped === true
   const afterFirst = textarea.value;
   keydowns[0].fn({ key: "Enter", shiftKey: false, target: textarea });
   check("二次 Enter 不重复合并", textarea.value === afterFirst);
+}
+
+// ---- 组件真实挂载（SSR）：验证产品而非框架 --------------------------------
+{
+  const components = clientModule.__components;
+  check("__components 导出完整", typeof components === "object" && components !== null
+    && ["AttachButton", "AttachDock", "ChipPill", "CacheSettings"].every((name) => typeof components[name] === "function"));
+  const mountResults = [];
+  const mount = (name, props) => {
+    try {
+      const html = renderToString(React.createElement(components[name], props));
+      if (typeof html !== "string") throw new Error("not a string");
+      return true; // 空输出合法（AttachDock 无状态时渲染 null），关键是不抛错
+    } catch (error) {
+      mountResults.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  };
+  const allMounted = mount("AttachButton", { sessionId: "s1" })
+    && mount("AttachDock", { sessionId: "s1" })
+    && mount("ChipPill", { item: { key: "k", name: "测试.md", kind: "text", chars: 10, text: "x" } })
+    && mount("CacheSettings", {});
+  check("四个组件均可真实挂载（钩子引用完整，无 ReferenceError）", allMounted, mountResults.join(" | "));
 }
 
 console.log(`\n${failures === 0 ? "客户端冒烟通过 ✅" : `${failures} 项失败 ❌`}`);

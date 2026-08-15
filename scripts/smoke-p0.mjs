@@ -283,6 +283,8 @@ console.log("\n== 内容自适应引擎（条件：venv）==");
 
 console.log("\n== P2：路由级（doc-server / VLM / 缓存管理 / 零拷贝解析）==");
 {
+  const cacheTemp = mkdtempSync(join(tmpdir(), "dsh-p0-cache-"));
+  const sessionCwds = { "test-session": temp, "cache-session": cacheTemp };
   const routes = [];
   const ctx = {
     effect(callback) {
@@ -291,7 +293,9 @@ console.log("\n== P2：路由级（doc-server / VLM / 缓存管理 / 零拷贝�
     },
     webServer: { register(route) { routes.push(route); return () => {}; } },
     commands: { register() { return () => {}; } },
-    get() { return undefined; },
+    get(name) {
+      return name === "sessions" ? { get: (id) => ({ header: { cwd: sessionCwds[id] ?? temp } }) } : undefined;
+    },
     logger: { warn: () => {}, info: () => {}, error: () => {} }
   };
   plugin.apply(ctx);
@@ -318,9 +322,9 @@ console.log("\n== P2：路由级（doc-server / VLM / 缓存管理 / 零拷贝�
     return { status, body: JSON.parse(response || "null") };
   };
 
-  /** 无文本层 PDF（灰矩形）。 */
-  const buildBlankPdf = () => {
-    const content = "q 0.5 0.5 0.5 RG 72 72 100 100 re f Q";
+  /** 无文本层 PDF（灰矩形）。extraContent 追加到内容流，让夹具字节可区分。 */
+  const buildBlankPdf = (extraContent = "") => {
+    const content = `q 0.5 0.5 0.5 RG 72 72 100 100 re f Q ${extraContent}`;
     const objs = [
       "<< /Type /Catalog /Pages 2 0 R >>",
       "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -371,7 +375,7 @@ console.log("\n== P2：路由级（doc-server / VLM / 缓存管理 / 零拷贝�
     const fixture = buildBlankPdf();
     const { body } = await call("/api/attach-formats/convert", {
       method: "POST",
-      body: JSON.stringify({ cwd: temp, files: [{ name: "报告.pdf", kind: "pdf", data: fixture.toString("base64") }] })
+      body: JSON.stringify({ sessionId: "test-session", cwd: temp, files: [{ name: "报告.pdf", kind: "pdf", data: fixture.toString("base64") }] })
     });
     const result = body?.results?.[0];
     check("doc-server → text 引擎标记", result?.kind === "text" && result?.engine === "doc-server", JSON.stringify(result?.error ?? result?.kind));
@@ -394,10 +398,10 @@ console.log("\n== P2：路由级（doc-server / VLM / 缓存管理 / 零拷贝�
     return { ok: false, status: 404, json: async () => ({}) };
   };
   {
-    const blank = buildBlankPdf();
+    const blank = buildBlankPdf("q 0.5 0.5 0.5 RG 150 150 50 50 re f Q"); // 与 doc-server 用例字节不同，避免缓存命中
     const { body } = await call("/api/attach-formats/convert", {
       method: "POST",
-      body: JSON.stringify({ cwd: temp, files: [{ name: "扫描.pdf", kind: "pdf", data: blank.toString("base64") }] })
+      body: JSON.stringify({ sessionId: "test-session", cwd: temp, files: [{ name: "扫描.pdf", kind: "pdf", data: blank.toString("base64") }] })
     });
     const result = body?.results?.[0];
     check("vlm OCR → text", result?.kind === "text", `got ${result?.kind} ${JSON.stringify(result?.warnings ?? result?.error ?? "")}`);
@@ -408,24 +412,25 @@ console.log("\n== P2：路由级（doc-server / VLM / 缓存管理 / 零拷贝�
   delete process.env.DSH_ATTACH_VLM_MODEL;
 
   // ---- 缓存管理路由 ------------------------------------------------------
+  // 使用独立 cacheTemp（sessionId=cache-session），与前面转换用例的缓存隔离
   {
-    const { root } = resolveCacheRoot(temp);
+    const { root } = resolveCacheRoot(cacheTemp);
     const seeded = Buffer.from("缓存管理测试内容");
     await writeCache({ root, rel: ".dsh-attachments" }, shortHashOf(seeded), "缓存文档.md", "text", [
       { name: "doc.md", data: seeded }
     ], { charCount: seeded.length, lineCount: 1, docFile: "doc.md" });
-    const list = await call(`/api/attach-formats/cache?cwd=${encodeURIComponent(temp)}`);
+    const list = await call(`/api/attach-formats/cache?sessionId=cache-session&cwd=${encodeURIComponent(cacheTemp)}`);
     check("cache list 有文档", list.body?.ok === true && list.body.docs.length === 1 && list.body.docs[0].name === "缓存文档.md");
     check("cache size > 0", list.body?.sizeBytes > 0, String(list.body?.sizeBytes));
     const id = list.body.docs[0].id;
-    const del = await call("/api/attach-formats/cache/delete", { method: "POST", body: JSON.stringify({ cwd: temp, ids: [id] }) });
+    const del = await call("/api/attach-formats/cache/delete", { method: "POST", body: JSON.stringify({ sessionId: "cache-session", cwd: cacheTemp, ids: [id] }) });
     check("cache delete", del.body?.ok === true && del.body.removed.includes(id));
-    const afterDelete = await call(`/api/attach-formats/cache?cwd=${encodeURIComponent(temp)}`);
+    const afterDelete = await call(`/api/attach-formats/cache?sessionId=cache-session&cwd=${encodeURIComponent(cacheTemp)}`);
     check("cache 删除后为空", afterDelete.body?.docs.length === 0);
     await writeCache({ root, rel: ".dsh-attachments" }, shortHashOf(seeded), "再种一个.md", "text", [
       { name: "doc.md", data: seeded }
     ], { charCount: seeded.length, lineCount: 1, docFile: "doc.md" });
-    const cleared = await call("/api/attach-formats/cache/clear", { method: "POST", body: JSON.stringify({ cwd: temp }) });
+    const cleared = await call("/api/attach-formats/cache/clear", { method: "POST", body: JSON.stringify({ sessionId: "cache-session", cwd: cacheTemp }) });
     check("cache clear", cleared.body?.ok === true && cleared.body.cleared === 1, JSON.stringify(cleared.body));
   }
 
@@ -435,14 +440,15 @@ console.log("\n== P2：路由级（doc-server / VLM / 缓存管理 / 零拷贝�
     mkdirSync(sub, { recursive: true });
     const big = "x".repeat(700 * 1024); // 700KB，超过 512KB 阈值
     writeFileSync(join(sub, "大文件.md"), big);
-    const resolve = await call(`/api/attach-formats/resolve?cwd=${encodeURIComponent(temp)}&name=${encodeURIComponent("大文件.md")}&size=${Buffer.byteLength(big)}`);
+    const resolve = await call(`/api/attach-formats/resolve?sessionId=test-session&cwd=${encodeURIComponent(temp)}&name=${encodeURIComponent("大文件.md")}&size=${Buffer.byteLength(big)}`);
     check("resolve 命中同源文件", resolve.body?.ok === true && resolve.body.found === true && resolve.body.rel === "subdir/大文件.md", JSON.stringify(resolve.body));
-    const miss = await call(`/api/attach-formats/resolve?cwd=${encodeURIComponent(temp)}&name=${encodeURIComponent("不存在.md")}&size=1`);
+    const miss = await call(`/api/attach-formats/resolve?sessionId=test-session&cwd=${encodeURIComponent(temp)}&name=${encodeURIComponent("不存在.md")}&size=1`);
     check("resolve 未命中", miss.body?.ok === true && miss.body.found === false);
   }
 
   globalThis.fetch = realFetch;
   restoreEnv();
+  try { rmSync(cacheTemp, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
 try { rmSync(temp, { recursive: true, force: true }); } catch { /* ignore */ }

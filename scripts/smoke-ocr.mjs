@@ -12,13 +12,11 @@
 import { Readable } from "node:stream";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { createCanvas } from "@napi-rs/canvas";
 import * as plugin from "../lib/index.js";
 import { disposeOcr, TESSDATA_DIR } from "../lib/convert/ocr.js";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const testCwd = mkdtempSync(join(tmpdir(), "dsh-ocr-test-"));
 
 let failures = 0;
@@ -107,7 +105,9 @@ const ctx = {
   },
   webServer: { register(route) { routes.push(route); return () => {}; } },
   commands: { register() { return () => {}; } },
-  get() { return undefined; },
+  get(name) {
+    return name === "sessions" ? { get: () => ({ header: { cwd: testCwd } }) } : undefined;
+  },
   logger: console
 };
 plugin.apply(ctx);
@@ -119,7 +119,7 @@ process.env.DSH_ATTACH_OCR = "auto";
 
 async function callRoute(files, extra = {}) {
   const handler = routes.find((route) => route.path === "/api/attach-formats/convert").handler;
-  const body = JSON.stringify({ files, cwd: testCwd, ...extra });
+  const body = JSON.stringify({ files, sessionId: "test-session", cwd: testCwd, ...extra });
   const req = new Readable({
     read() {
       this.push(Buffer.from(body));
@@ -171,6 +171,9 @@ if (engReady && chiReady) {
 
 console.log("\n== 聚合索引 INDEX.md（多文档）==");
 {
+  const countCacheDirs = () =>
+    readdirSync(join(testCwd, ".dsh-attachments"), { withFileTypes: true }).filter((e) => e.isDirectory()).length;
+  const before = countCacheDirs(); // 前面的 OCR 用例可能已落盘缓存，用增量断言
   const longA = "a".repeat(70_000) + "\n# 甲文档\n";
   const longB = "b".repeat(70_000) + "\n# 乙文档\n";
   await callRoute([{ name: "甲.md", kind: "text-cache", data: Buffer.from(longA).toString("base64") }]);
@@ -181,8 +184,8 @@ console.log("\n== 聚合索引 INDEX.md（多文档）==");
     const index = readFileSync(indexPath, "utf8");
     check("INDEX.md lists both docs", index.includes("甲.md") && index.includes("乙.md"));
   }
-  const cacheDirs = readdirSync(join(testCwd, ".dsh-attachments"), { withFileTypes: true }).filter((e) => e.isDirectory());
-  check("two cache dirs", cacheDirs.length === 2, `got ${cacheDirs.length}`);
+  const after = countCacheDirs();
+  check("two new cache dirs", after - before === 2, `before=${before} after=${after}`);
 }
 
 process.env.DSH_ATTACH_ENGINE = previousEngine ?? undefined;

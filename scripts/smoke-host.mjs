@@ -5,7 +5,7 @@
  * 校验产物（PNG 魔数、页面尺寸、文本标记），并把中间产物写到 temp/。
  * 运行：npm run smoke
  */
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import JSZip from "jszip";
@@ -96,6 +96,52 @@ async function buildXlsx() {
   const note = workbook.addWorksheet("备注");
   note.addRow(["冒烟测试"]);
   return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+/** 列间隙夹具：A、C 有值而 B 为空——验证矩形网格不漂移。 */
+async function buildXlsxGap() {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("间隙");
+  const row = sheet.getRow(1);
+  row.getCell(1).value = "左";
+  row.getCell(3).value = "右";
+  const second = sheet.getRow(2);
+  second.getCell(1).value = "甲";
+  second.getCell(2).value = "乙";
+  second.getCell(3).value = "丙";
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+/** 超大 DOCX（~36 万字符，验证转换器不截断）。 */
+async function buildHugeDocx() {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      "</Types>"
+  );
+  zip.file(
+    "_rels/.rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      "</Relationships>"
+  );
+  const paragraphs = [];
+  for (let i = 0; i < 14000; i += 1) {
+    paragraphs.push(`<w:p><w:r><w:t>段落 ${i}：全文不截断验证内容。abcdefghijklmnopqrstuvwxyz</w:t></w:r></w:p>`);
+  }
+  zip.file(
+    "word/document.xml",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      `<w:body>${paragraphs.join("")}</w:body></w:document>`
+  );
+  return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }
 
 async function buildPptx() {
@@ -198,6 +244,43 @@ console.log("\n== PPTX ==");
   check("pptx slide 1", text.includes("[幻灯片 1]") && text.includes("标题一"));
   check("pptx slide 2 + entities", text.includes("[幻灯片 2]") && text.includes("第二页 & 内容"));
   writeFileSync(join(temp, "pptx.txt"), text, "utf8");
+}
+
+console.log("\n== 修复验证：XLSX 列坐标不漂移 ==");
+{
+  const text = await xlsxToText(await buildXlsxGap());
+  const firstRow = text.split("\n")[1] ?? "";
+  check("A、C 有值 B 为空 → 保留空列（左\\t\\t右）", firstRow === "左\t\t右", JSON.stringify(firstRow));
+  check("第二行完整", text.includes("甲\t乙\t丙"));
+}
+
+console.log("\n== 修复验证：DOCX 转换器不截断 ==");
+{
+  const text = await docxToText(new Uint8Array(await buildHugeDocx()));
+  check("36 万字符 docx 返回全文（>300k）", text.length > 300_000, `len=${text.length}`);
+}
+
+console.log("\n== 修复验证：缓存 TTL 按 lastAccessedAt 续期 ==");
+{
+  const { cleanupCache, writeCache, shortHashOf } = await import("../lib/cache.js");
+  const seeded = Buffer.from("ttl 测试内容");
+  const id = shortHashOf(seeded);
+  const cacheTemp = join(temp, "ttl-cache");
+  const { mkdirSync } = await import("node:fs");
+  mkdirSync(cacheTemp, { recursive: true });
+  await writeCache({ root: cacheTemp, rel: ".dsh-attachments" }, id, "ttl.md", "text", [
+    { name: "doc.md", data: seeded }
+  ], { sourceHash: id, charCount: seeded.length, lineCount: 1, docFile: "doc.md" });
+  // 把 manifest 的 lastAccessedAt 拨到"刚刚"、目录 mtime 拨到 30 天前（模拟频繁访问的旧目录）
+  const { writeFileSync: wfs, utimesSync } = await import("node:fs");
+  const manifestPath = join(cacheTemp, id, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.lastAccessedAt = new Date().toISOString();
+  wfs(manifestPath, JSON.stringify(manifest));
+  const old = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  utimesSync(join(cacheTemp, id), old, old);
+  await cleanupCache(cacheTemp);
+  check("频繁访问的旧目录不会被误删", existsSync(join(cacheTemp, id, "doc.md")));
 }
 
 console.log(`\n${failures === 0 ? "全部通过 ✅" : `${failures} 项失败 ❌`}`);

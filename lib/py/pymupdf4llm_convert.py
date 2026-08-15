@@ -33,7 +33,7 @@ def main():
         has_text = False
         ocr = False
 
-        # v0.7 内容自适应：大文档先采样判断向量密度，纯文字文档直接跳过
+        # v0.6 内容自适应：大文档先采样判断向量密度，纯文字文档直接跳过
         # 高保真转换（由 Node 侧回退 pdfjs 快速引擎，避免无谓的长时间转换）。
         vector_score = None
         if page_count > 40:
