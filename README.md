@@ -246,6 +246,14 @@ afterwards).
   heuristics (weak on documents without strong heading styling) — the index card still
   carries line/page counts and reading pointers.
 - iWork and archives are not converted yet.
+- Attachments are attributed to the shell's **current conversation** (the one being
+  viewed). Text/document cards therefore land in the dialog you are looking at.
+  Converted page images go through the harness's native drop pipeline: if the current
+  conversation is mid-reply it temporarily refuses drops, so the plugin waits for it
+  to become idle before feeding the images. With several conversations open at once,
+  other *idle* conversations may also accept that same synthetic drop — a harness-level
+  behavior the plugin cannot scope; prefer attaching images with a single conversation
+  open (text/code files are unaffected: they always stay in the current dialog).
 - The "merge on send" for document cards bridges into the React controlled input over
   DOM events — an adaptation to an unpublished harness API; if a core upgrade breaks it,
   the symptom is "card content didn't enter the message", and the card's **send** button

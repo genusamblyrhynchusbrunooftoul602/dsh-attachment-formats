@@ -115,10 +115,20 @@ check("client exports apply/inject", typeof clientModule?.apply === "function" &
 
 // ---- 假 slots ctx（inject 立即执行声明回调；register 记录选项）--------------
 const registered = [];
+// shell「当前会话」可变快照：测试通过切换 current 验证附件会话路由
+const shellSnapshot = { current: "s1", byId: {} };
 const ctx = {
   effect(callback) {
     callback();
     return () => {};
+  },
+  sessions: {
+    list: { getSnapshot: () => shellSnapshot },
+    binding: () => ({
+      session: { projections: { faceOf: () => ({ getSnapshot: () => null }) } },
+      hooks: { input: { getSnapshot: () => ({ phase: "idle" }) } }
+    }),
+    provideInfo: () => ({ hooks: { input: { getSnapshot: () => ({ phase: "idle" }) } } })
   },
   slots: {
     inject(key, callback) {
@@ -214,6 +224,12 @@ check("pdf drop intercepted", evPdf.prevented === true && evPdf.stopped === true
   drops[0].fn(evDropMd);
   await new Promise((resolve) => setTimeout(resolve, 30));
   check("芯片期：输入框保持干净", textarea.value === "", `got ${JSON.stringify(textarea.value)}`);
+  // 会话路由：芯片挂在 intake 时的 shell 当前会话（s1）上；
+  // 切到 s2 后 Enter 不得合并 s1 的芯片，切回 s1 才能合并。
+  shellSnapshot.current = "s2";
+  keydowns[0].fn({ key: "Enter", shiftKey: false, target: textarea });
+  check("s2 不会合并 s1 的芯片", textarea.value === "", `got ${JSON.stringify(textarea.value)}`);
+  shellSnapshot.current = "s1";
   keydowns[0].fn({ key: "Enter", shiftKey: false, target: textarea });
   check(
     "Enter 合并：草稿含附件标记与内容",
